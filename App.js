@@ -1,14 +1,36 @@
 import React, { Component } from 'react';
-import { Alert, AppRegistry, Platform, StyleSheet, Text, TouchableHighlight, TouchableOpacity, TouchableNativeFeedback, TouchableWithoutFeedback, View } from 'react-native';
+import {
+  Alert, AppRegistry, AsyncStorage, Platform, StyleSheet, Text,
+  TouchableHighlight, TouchableOpacity, TouchableNativeFeedback, TouchableWithoutFeedback,
+  FlatList, View, ListItem } from 'react-native';
 import OneSignal from 'react-native-onesignal';
+import Storage from 'react-native-storage';
+
+var storage = new Storage({
+    size: 100,
+    storageBackend: AsyncStorage,
+    defaultExpires: 7000 * 3600 * 24,
+    enableCache: true,
+    sync : {
+        // we'll talk about the details later.
+    }
+})
 
 export default class Notify extends Component {
-  _onPressButton() {
-    Alert.alert('You tapped the button!')
+  constructor(props) {
+    super(props);
+    this.state = {
+      notifications: [],
+    };
   }
 
-  _onLongPressButton() {
-    Alert.alert('You long-pressed the button!')
+  componentWillMount() {
+    OneSignal.addEventListener('received', this.onReceived);
+    this.loadNotifications();
+  }
+
+  componentWillUnmount() {
+    OneSignal.removeEventListener('received', this.onReceived);
   }
 
   componentDidMount() {
@@ -16,39 +38,44 @@ export default class Notify extends Component {
   }
 
   render() {
+    if (!this.state) {
+      return (
+        <View>
+          <Text>Loading...</Text>
+        </View>
+      );
+    }
+
     return (
-      <View style={styles.container}>
-        <TouchableHighlight onPress={this._onPressButton} underlayColor="white">
-          <View style={styles.button}>
-            <Text style={styles.buttonText}>TouchableHighlight</Text>
-          </View>
-        </TouchableHighlight>
-        <TouchableOpacity onPress={this._onPressButton}>
-          <View style={styles.button}>
-            <Text style={styles.buttonText}>TouchableOpacity</Text>
-          </View>
-        </TouchableOpacity>
-        <TouchableNativeFeedback
-            onPress={this._onPressButton}
-            background={Platform.OS === 'android' ? TouchableNativeFeedback.SelectableBackground() : ''}>
-          <View style={styles.button}>
-            <Text style={styles.buttonText}>TouchableNativeFeedback</Text>
-          </View>
-        </TouchableNativeFeedback>
-        <TouchableWithoutFeedback
-            onPress={this._onPressButton}
-            >
-          <View style={styles.button}>
-            <Text style={styles.buttonText}>TouchableWithoutFeedback</Text>
-          </View>
-        </TouchableWithoutFeedback>
-        <TouchableHighlight onPress={this._onPressButton} onLongPress={this._onLongPressButton} underlayColor="white">
-          <View style={styles.button}>
-            <Text style={styles.buttonText}>Touchable with Long Press</Text>
-          </View>
-        </TouchableHighlight>
-      </View>
+      <FlatList
+        data={this.state.notifications}
+        renderItem={({item}) => <Text>{item.body}</Text>}
+      />
     );
+  }
+
+  loadNotifications() {
+    storage.getAllDataForKey('notification').then(notifications => {
+      this.setState({
+        notifications: notifications.reverse().map((notification) => {
+          return {
+            key: notification.notificationId,
+            body: notification.body,
+          };
+        })
+      });
+    });
+  }
+
+  onReceived(notification) {
+    storage.save({
+      key: 'notification',
+      id: notification.payload.notificationID.replace('-',''),
+      data: {
+        notificationId: notification.payload.notificationID,
+        body: notification.payload.body,
+      },
+    });
   }
 }
 
